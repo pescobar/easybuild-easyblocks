@@ -1,14 +1,14 @@
 ##
-# Copyright 2009-2016 Ghent University
+# Copyright 2009-2018 Ghent University
 #
 # This file is part of EasyBuild,
 # originally created by the HPC team of Ghent University (http://ugent.be/hpc/en),
 # with support of Ghent University (http://ugent.be/hpc),
-# the Flemish Supercomputer Centre (VSC) (https://vscentrum.be/nl/en),
+# the Flemish Supercomputer Centre (VSC) (https://www.vscentrum.be),
 # Flemish Research Foundation (FWO) (http://www.fwo.be/en)
 # and the Department of Economy, Science and Innovation (EWI) (http://www.ewi-vlaanderen.be/en).
 #
-# http://github.com/hpcugent/easybuild
+# https://github.com/easybuilders/easybuild
 #
 # EasyBuild is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -61,8 +61,8 @@ class EB_scipy(FortranPythonPackage):
     def sanity_check_step(self, *args, **kwargs):
         """Custom sanity check for scipy."""
         custom_paths = {
-            'files': [os.path.join(self.pylibdir, 'scipy', '__init__.py')],
-            'dirs': [],
+            'files': [],
+            'dirs': [self.pylibdir],
         }
         custom_commands = [(self.python_cmd, '-c "import scipy"')]
         return super(EB_scipy, self).sanity_check_step(custom_paths=custom_paths, custom_commands=custom_commands)

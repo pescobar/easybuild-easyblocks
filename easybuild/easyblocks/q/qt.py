@@ -4,11 +4,11 @@
 # This file is part of EasyBuild,
 # originally created by the HPC team of Ghent University (http://ugent.be/hpc/en),
 # with support of Ghent University (http://ugent.be/hpc),
-# the Flemish Supercomputer Centre (VSC) (https://vscentrum.be/nl/en),
+# the Flemish Supercomputer Centre (VSC) (https://www.vscentrum.be),
 # Flemish Research Foundation (FWO) (http://www.fwo.be/en)
 # and the Department of Economy, Science and Innovation (EWI) (http://www.ewi-vlaanderen.be/en).
 #
-# http://github.com/hpcugent/easybuild
+# https://github.com/easybuilders/easybuild
 #
 # EasyBuild is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -34,6 +34,7 @@ import easybuild.tools.toolchain as toolchain
 from easybuild.easyblocks.generic.configuremake import ConfigureMake
 from easybuild.framework.easyconfig import CUSTOM
 from easybuild.tools.build_log import EasyBuildError
+from easybuild.tools.filetools import apply_regex_substitutions
 from easybuild.tools.run import run_cmd_qa
 from easybuild.tools.systemtools import get_shared_lib_ext
 
@@ -47,7 +48,12 @@ class EB_Qt(ConfigureMake):
         extra_vars = {
              'platform': [None, "Target platform to build for (e.g. linux-g++-64, linux-icc-64)", CUSTOM],
         }
-        return ConfigureMake.extra_options(extra_vars)
+        extra_vars = ConfigureMake.extra_options(extra_vars)
+
+        # allowing to specify prefix_opt doesn't make sense for Qt, since -prefix is hardcoded in configure_step
+        del extra_vars['prefix_opt']
+
+        return extra_vars
 
     def configure_step(self):
         """Configure Qt using interactive `configure` script."""
@@ -62,17 +68,29 @@ class EB_Qt(ConfigureMake):
         elif comp_fam in [toolchain.GCC]:  #@UndefinedVariable
             platform = 'linux-g++-64'
         elif comp_fam in [toolchain.INTELCOMP]:  #@UndefinedVariable
-            platform = 'linux-icc-64'
+            if LooseVersion(self.version) >= LooseVersion('4'):
+                platform = 'linux-icc-64'
+            else:
+                platform = 'linux-icc'
+                # fix -fPIC flag (-KPIC is not correct for recent Intel compilers)
+                qmake_conf = os.path.join('mkspecs', platform, 'qmake.conf')
+                apply_regex_substitutions(qmake_conf, [('-KPIC', '-fPIC')])
                 
         if platform:
             self.cfg.update('configopts', "-platform %s" % platform)
         else:
             raise EasyBuildError("Don't know which platform to set based on compiler family.")
 
-        cmd = "%s ./configure --prefix=%s %s" % (self.cfg['preconfigopts'], self.installdir, self.cfg['configopts'])
+        # configure Qt such that xmlpatterns is also installed
+        # -xmlpatterns is not a known configure option for Qt 5.x, but there xmlpatterns support is enabled by default
+        if LooseVersion(self.version) >= LooseVersion('4') and LooseVersion(self.version) < LooseVersion('5'):
+            self.cfg.update('configopts', '-xmlpatterns')
+
+        cmd = "%s ./configure -prefix %s %s" % (self.cfg['preconfigopts'], self.installdir, self.cfg['configopts'])
         qa = {
             "Type 'o' if you want to use the Open Source Edition.": 'o',
             "Do you accept the terms of either license?": 'yes',
+            "Which edition of Qt do you want to use?": 'o',
         }
         no_qa = [
             "for .*pro",
@@ -82,6 +100,7 @@ class EB_Qt(ConfigureMake):
             "Project MESSAGE:.*",
             "rm -f .*",
             'Creating qmake...',
+            'Checking for .*...',
         ]
         run_cmd_qa(cmd, qa, no_qa=no_qa, log_all=True, simple=True, maxhits=120)
 
@@ -102,13 +121,24 @@ class EB_Qt(ConfigureMake):
     def sanity_check_step(self):
         """Custom sanity check for Qt."""
 
-        libversion = ''
-        if LooseVersion(self.version) >= LooseVersion('5'):
-            libversion = self.version.split('.')[0]
+        shlib_ext = get_shared_lib_ext()
+
+        if LooseVersion(self.version) >= LooseVersion('4'):
+            libversion = ''
+            if LooseVersion(self.version) >= LooseVersion('5'):
+                libversion = self.version.split('.')[0]
+
+            libfile = os.path.join('lib', 'libQt%sCore.%s' % (libversion, shlib_ext))
+
+        else:
+            libfile = os.path.join('lib', 'libqt.%s' % shlib_ext)
 
         custom_paths = {
-            'files': ["lib/libQt%sCore.%s" % (libversion, get_shared_lib_ext())],
-            'dirs': ["bin", "include", "plugins"],
+            'files': ['bin/moc', 'bin/qmake', libfile],
+            'dirs': ['include', 'plugins'],
         }
+
+        if LooseVersion(self.version) >= LooseVersion('4'):
+            custom_paths['files'].append('bin/xmlpatterns')
 
         super(EB_Qt, self).sanity_check_step(custom_paths=custom_paths)

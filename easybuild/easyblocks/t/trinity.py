@@ -1,14 +1,14 @@
 ##
-# Copyright 2009-2016 Ghent University
+# Copyright 2009-2018 Ghent University
 #
 # This file is part of EasyBuild,
 # originally created by the HPC team of Ghent University (http://ugent.be/hpc/en),
 # with support of Ghent University (http://ugent.be/hpc),
-# the Flemish Supercomputer Centre (VSC) (https://vscentrum.be/nl/en),
+# the Flemish Supercomputer Centre (VSC) (https://www.vscentrum.be),
 # Flemish Research Foundation (FWO) (http://www.fwo.be/en)
 # and the Department of Economy, Science and Innovation (EWI) (http://www.ewi-vlaanderen.be/en).
 #
-# http://github.com/hpcugent/easybuild
+# https://github.com/easybuilders/easybuild
 #
 # EasyBuild is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -43,6 +43,7 @@ import easybuild.tools.toolchain as toolchain
 from easybuild.framework.easyblock import EasyBlock
 from easybuild.framework.easyconfig import CUSTOM
 from easybuild.tools.build_log import EasyBuildError
+from easybuild.tools.environment import setvar
 from easybuild.tools.filetools import apply_regex_substitutions
 from easybuild.tools.modules import get_software_root
 from easybuild.tools.run import run_cmd
@@ -71,6 +72,8 @@ class EB_Trinity(EasyBlock):
         """Install procedure for Butterfly."""
 
         self.log.info("Begin Butterfly")
+
+        setvar("JAVA_TOOL_OPTIONS", "-Dfile.encoding=UTF8")
 
         dst = os.path.join(self.cfg['start_dir'], 'Butterfly', 'src')
         try:
@@ -309,8 +312,10 @@ class EB_Trinity(EasyBlock):
         """Custom sanity check for Trinity."""
 
         version = LooseVersion(self.version)
-        if version >= LooseVersion('2.0') and version < LooseVersion('3.0'):
+        if version >= LooseVersion('2.0') and version < LooseVersion('2.3'):
             sep = '-'
+        elif version >= LooseVersion('2.3') and version < LooseVersion('3.0'):
+            sep = "-Trinity-v"
         else:
             sep = '_r'
 
